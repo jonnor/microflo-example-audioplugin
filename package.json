@@ -5,7 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "microflo runtime --componentmap build/blink/componentlib-map.json",
-    "build": "mkdir build; g++ -Wall -Werror -shared -fPIC -o build/plugin.so plugin.cpp"
+    "build": "rm -r build && mkdir build && g++ -Wall -Werror -shared -fPIC -o build/plugin.so plugin.cpp"
   },
   "repository": {
     "type": "git",
