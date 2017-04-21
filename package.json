@@ -1,0 +1,30 @@
+{
+  "name": "microflo-example-audioplugin",
+  "version": "0.0.1",
+  "description": "Quick start example for audio effects plugins with MicroFlo",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "microflo runtime --componentmap build/blink/componentlib-map.json",
+    "build": "mkdir build; g++ -Wall -Werror -shared -fPIC -o build/plugin.so plugin.cpp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/microflo/microflo-example-audioplugin.git"
+  },
+  "keywords": [
+    "microflo",
+    "arduino",
+    "fbp",
+    "dataflow"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/microflo/microflo-example-audioplugin/issues"
+  },
+  "homepage": "https://github.com/microflo/microflo-example-audioplugin#readme",
+  "devDependencies": {
+    "microflo": "^0.3.47",
+    "microflo-core": "^0.3.37"
+  }
+}
