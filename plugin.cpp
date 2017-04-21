@@ -66,35 +66,28 @@ typedef struct {
 
 /* Construct a new plugin instance. */
 static LADSPA_Handle 
-instantiate(const LADSPA_Descriptor * Descriptor,
-			   unsigned long             SampleRate) {
-
-  unsigned long lMinimumBufferSize;
-  SimpleDelayLine * self;
-
-  self 
-    = (SimpleDelayLine *)malloc(sizeof(SimpleDelayLine));
-
+instantiate(const LADSPA_Descriptor * Descriptor, unsigned long SampleRate)
+{
+  SimpleDelayLine *self = (SimpleDelayLine *)malloc(sizeof(SimpleDelayLine));
   if (self == NULL) 
     return NULL;
   
   self->SampleRate = (LADSPA_Data)SampleRate;
 
   /* Buffer size is a power of two bigger than max delay time. */
-  lMinimumBufferSize = (unsigned long)((LADSPA_Data)SampleRate * MAX_DELAY);
+  const unsigned long lMinimumBufferSize = (unsigned long)((LADSPA_Data)SampleRate * MAX_DELAY);
   self->BufferSize = 1;
   while (self->BufferSize < lMinimumBufferSize)
     self->BufferSize <<= 1;
   
-  self->Buffer 
-    = (LADSPA_Data *)calloc(self->BufferSize, sizeof(LADSPA_Data));
+  self->Buffer = (LADSPA_Data *)calloc(self->BufferSize, sizeof(LADSPA_Data));
   if (self->Buffer == NULL) {
     free(self);
     return NULL;
   }
 
   self->WritePointer = 0;
-  
+
   return self;
 }
 
@@ -110,8 +103,7 @@ activate(LADSPA_Handle Instance) {
   /* Need to reset the delay history in this function rather than
      instantiate() in case deactivate() followed by activate() have
      been called to reinitialise a delay line. */
-  memset(self->Buffer, 0, 
-	 sizeof(LADSPA_Data) * self->BufferSize);
+  memset(self->Buffer, 0, sizeof(LADSPA_Data) * self->BufferSize);
 }
 
 /*****************************************************************************/
@@ -144,50 +136,25 @@ connectPort(LADSPA_Handle Instance, unsigned long Port, LADSPA_Data * DataLocati
 /* Run a delay line instance for a block of SampleCount samples. */
 static void
 run(LADSPA_Handle Instance, unsigned long SampleCount) {
-  
-  LADSPA_Data * Buffer;
-  LADSPA_Data * Input;
-  LADSPA_Data * Output;
-  LADSPA_Data fDry;
-  LADSPA_Data fInputSample;
-  LADSPA_Data fWet;
-  SimpleDelayLine * self;
-  unsigned long lBufferReadOffset;
-  unsigned long lBufferSizeMinusOne;
-  unsigned long lBufferWriteOffset;
-  unsigned long lDelay;
-  unsigned long lSampleIndex;
+  SimpleDelayLine * self = (SimpleDelayLine *)Instance;
 
-  self = (SimpleDelayLine *)Instance;
+  const unsigned long lDelay = (unsigned long)(CONSTRAIN(*(self->Delay), 0, MAX_DELAY)*self->SampleRate);
+  const float fWet = CONSTRAIN(*(self->DryWet), 0, 1);
+  const float fDry = 1 - fWet;  
 
-  lBufferSizeMinusOne = self->BufferSize - 1;
-  lDelay = (unsigned long)
-    (CONSTRAIN(*(self->Delay), 0, MAX_DELAY) 
-     * self->SampleRate);
+  LADSPA_Data *Input = self->Input;
+  LADSPA_Data *Output = self->Output;
 
-  Input = self->Input;
-  Output = self->Output;
-  Buffer = self->Buffer;
-  lBufferWriteOffset = self->WritePointer;
-  lBufferReadOffset
-    = lBufferWriteOffset + self->BufferSize - lDelay;
-  fWet = CONSTRAIN(*(self->DryWet), 0, 1);
-  fDry = 1 - fWet;
-
-  for (lSampleIndex = 0;
-       lSampleIndex < SampleCount;
-       lSampleIndex++) {
-    fInputSample = *(Input++);
+  const unsigned long lBufferWriteOffset = self->WritePointer;
+  const unsigned long lBufferReadOffset = lBufferWriteOffset + self->BufferSize - lDelay;
+  for (unsigned long lSampleIndex = 0; lSampleIndex < SampleCount; lSampleIndex++) {
+    LADSPA_Data fInputSample = *(Input++);
     *(Output++) = (fDry * fInputSample
-		     + fWet * Buffer[((lSampleIndex + lBufferReadOffset)
-					& lBufferSizeMinusOne)]);
-    Buffer[((lSampleIndex + lBufferWriteOffset)
-	      & lBufferSizeMinusOne)] = fInputSample;
+		     + fWet * self->Buffer[((lSampleIndex + lBufferReadOffset) & (self->BufferSize-1))]);
+    self->Buffer[((lSampleIndex + lBufferWriteOffset) & (self->BufferSize-1))] = fInputSample;
   }
 
-  self->WritePointer
-    = ((self->WritePointer + SampleCount)
-       & lBufferSizeMinusOne);
+  self->WritePointer = ((self->WritePointer + SampleCount) & (self->BufferSize-1));
 }
 
 /*****************************************************************************/
@@ -214,12 +181,7 @@ __attribute__ ((constructor))
 static void
 init() {
 
-  char ** portNames;
-  LADSPA_PortDescriptor * portDescriptors;
-  LADSPA_PortRangeHint * portRangeHints;
-
-  pluginDescriptor
-    = (LADSPA_Descriptor *)malloc(sizeof(LADSPA_Descriptor));
+  pluginDescriptor = (LADSPA_Descriptor *)malloc(sizeof(LADSPA_Descriptor));
   if (pluginDescriptor) {
     // Plugin info
     pluginDescriptor->UniqueID = 1043;
@@ -231,13 +193,13 @@ init() {
     pluginDescriptor->PortCount = PLUGIN_PORTS_N;
 
     // Port types
-    portDescriptors = (LADSPA_PortDescriptor *)calloc(PLUGIN_PORTS_N, sizeof(LADSPA_PortDescriptor));
+    LADSPA_PortDescriptor *portDescriptors = (LADSPA_PortDescriptor *)calloc(PLUGIN_PORTS_N, sizeof(LADSPA_PortDescriptor));
     pluginDescriptor->PortDescriptors = (const LADSPA_PortDescriptor *)portDescriptors;
     portDescriptors[SDL_DELAY_LENGTH] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
     portDescriptors[SDL_DRY_WET] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
     portDescriptors[SDL_INPUT] = LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO;
     portDescriptors[SDL_OUTPUT] = LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO;
-    portNames = (char **)calloc(PLUGIN_PORTS_N, sizeof(char *));
+    char ** portNames = (char **)calloc(PLUGIN_PORTS_N, sizeof(char *));
 
     // Port names
     pluginDescriptor->PortNames = (const char **)portNames;
@@ -247,7 +209,7 @@ init() {
     portNames[SDL_OUTPUT] = strdup("Output");
 
     // Port ranges
-    portRangeHints = ((LADSPA_PortRangeHint *)calloc(PLUGIN_PORTS_N, sizeof(LADSPA_PortRangeHint)));
+    LADSPA_PortRangeHint *portRangeHints = ((LADSPA_PortRangeHint *)calloc(PLUGIN_PORTS_N, sizeof(LADSPA_PortRangeHint)));
     pluginDescriptor->PortRangeHints = (const LADSPA_PortRangeHint *)portRangeHints;
     portRangeHints[SDL_DELAY_LENGTH].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE;
     portRangeHints[SDL_DELAY_LENGTH].LowerBound = 0;
