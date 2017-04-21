@@ -171,8 +171,16 @@ cleanup(LADSPA_Handle Instance) {
 }
 
 /*****************************************************************************/
-
-LADSPA_Descriptor * pluginDescriptor = NULL;
+LADSPA_Descriptor pluginDescriptor = {
+    // metadata
+    UniqueID: 1043,
+    Label: "delay_5s",
+    Properties: LADSPA_PROPERTY_HARD_RT_CAPABLE,
+    Name: "Simple Delay Line",
+    Maker: "Richard Furse (LADSPA example plugins)",
+    Copyright: "None",
+    PortCount: PLUGIN_PORTS_N
+};
 
 /*****************************************************************************/
 
@@ -181,20 +189,9 @@ __attribute__ ((constructor))
 static void
 init() {
 
-  pluginDescriptor = (LADSPA_Descriptor *)malloc(sizeof(LADSPA_Descriptor));
-  if (pluginDescriptor) {
-    // Plugin info
-    pluginDescriptor->UniqueID = 1043;
-    pluginDescriptor->Label = strdup("delay_5s");
-    pluginDescriptor->Properties = LADSPA_PROPERTY_HARD_RT_CAPABLE;
-    pluginDescriptor->Name = strdup("Simple Delay Line");
-    pluginDescriptor->Maker = strdup("Richard Furse (LADSPA example plugins)");
-    pluginDescriptor->Copyright = strdup("None");
-    pluginDescriptor->PortCount = PLUGIN_PORTS_N;
-
     // Port types
     LADSPA_PortDescriptor *portDescriptors = (LADSPA_PortDescriptor *)calloc(PLUGIN_PORTS_N, sizeof(LADSPA_PortDescriptor));
-    pluginDescriptor->PortDescriptors = (const LADSPA_PortDescriptor *)portDescriptors;
+    pluginDescriptor.PortDescriptors = (const LADSPA_PortDescriptor *)portDescriptors;
     portDescriptors[SDL_DELAY_LENGTH] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
     portDescriptors[SDL_DRY_WET] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
     portDescriptors[SDL_INPUT] = LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO;
@@ -202,7 +199,7 @@ init() {
     char ** portNames = (char **)calloc(PLUGIN_PORTS_N, sizeof(char *));
 
     // Port names
-    pluginDescriptor->PortNames = (const char **)portNames;
+    pluginDescriptor.PortNames = (const char **)portNames;
     portNames[SDL_DELAY_LENGTH] = strdup("Delay (Seconds)");
     portNames[SDL_DRY_WET] = strdup("Dry/Wet Balance");
     portNames[SDL_INPUT] = strdup("Input");
@@ -210,7 +207,7 @@ init() {
 
     // Port ranges
     LADSPA_PortRangeHint *portRangeHints = ((LADSPA_PortRangeHint *)calloc(PLUGIN_PORTS_N, sizeof(LADSPA_PortRangeHint)));
-    pluginDescriptor->PortRangeHints = (const LADSPA_PortRangeHint *)portRangeHints;
+    pluginDescriptor.PortRangeHints = (const LADSPA_PortRangeHint *)portRangeHints;
     portRangeHints[SDL_DELAY_LENGTH].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE;
     portRangeHints[SDL_DELAY_LENGTH].LowerBound = 0;
     portRangeHints[SDL_DELAY_LENGTH].UpperBound = (LADSPA_Data)MAX_DELAY;
@@ -220,41 +217,20 @@ init() {
     portRangeHints[SDL_INPUT].HintDescriptor = 0;
     portRangeHints[SDL_OUTPUT].HintDescriptor = 0;
 
-    pluginDescriptor->instantiate = instantiate;
-    pluginDescriptor->cleanup = cleanup;
 
-    pluginDescriptor->activate = activate;
-    pluginDescriptor->deactivate = NULL;
+    // functions
+    pluginDescriptor.instantiate = instantiate;
+    pluginDescriptor.cleanup = cleanup;
 
-    pluginDescriptor->connect_port = connectPort;
+    pluginDescriptor.activate = activate;
+    pluginDescriptor.deactivate = NULL;
 
-    pluginDescriptor->run = run;
-    pluginDescriptor->run_adding = NULL;
-    pluginDescriptor->set_run_adding_gain = NULL;
-  }
+    pluginDescriptor.connect_port = connectPort;
+
+    pluginDescriptor.run = run;
+    pluginDescriptor.run_adding = NULL;
+    pluginDescriptor.set_run_adding_gain = NULL;
 }
-
-/*****************************************************************************/
-
-/* fini() is called automatically when the library is unloaded. */
-__attribute__ ((destructor))
-static void
-fini() {
-  if (pluginDescriptor) {
-    free((char *)pluginDescriptor->Label);
-    free((char *)pluginDescriptor->Name);
-    free((char *)pluginDescriptor->Maker);
-    free((char *)pluginDescriptor->Copyright);
-    free((LADSPA_PortDescriptor *)pluginDescriptor->PortDescriptors);
-    for (unsigned int lIndex = 0; lIndex < pluginDescriptor->PortCount; lIndex++)
-      free((char *)(pluginDescriptor->PortNames[lIndex]));
-    free((char **)pluginDescriptor->PortNames);
-    free((LADSPA_PortRangeHint *)pluginDescriptor->PortRangeHints);
-    free(pluginDescriptor);
-  }
-}
-
-/*****************************************************************************/
 
 /* Return a descriptor of the requested plugin type. Only one plugin
    type is available in this library. */
@@ -264,7 +240,7 @@ extern "C" {
 const LADSPA_Descriptor * 
 ladspa_descriptor(unsigned long Index) {
   if (Index == 0)
-    return pluginDescriptor;
+    return &pluginDescriptor;
   else
     return NULL;
 
