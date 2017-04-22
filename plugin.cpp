@@ -19,7 +19,7 @@ static const int MAX_DELAY = 5;
 /* The port numbers for the plugin: */
 
 enum PLUGIN_PORTS {
-    SDL_DELAY_LENGTH = 0,
+    SDL_DELAY = 0,
     SDL_DRY_WET,
     SDL_INPUT,
     SDL_OUTPUT,
@@ -38,6 +38,7 @@ typedef struct {
 
   LADSPA_Data SampleRate;
 
+  // Internal buffer
   LADSPA_Data * Buffer;
 
   /* Buffer size, a power of two. */
@@ -46,21 +47,8 @@ typedef struct {
   /* Write pointer in buffer. */
   unsigned long WritePointer;
 
-  /* Ports:
-     ------ */
-
-  /* Delay control, in seconds. Accepted between 0 and 1 (only 1 sec
-     of buffer is allocated by this crude delay line). */
-  LADSPA_Data * Delay;
-
-  /* Dry/wet control. 0 for entirely dry, 1 for entirely wet. */
-  LADSPA_Data * DryWet;
-
-  /* Input audio port data location. */
-  LADSPA_Data * Input;
-
-  /* Output audio port data location. */
-  LADSPA_Data * Output;
+  // Ports
+  LADSPA_Data *portData[PLUGIN_PORTS_N];
 
 } SimpleDelayLine;
 
@@ -112,24 +100,13 @@ activate(LADSPA_Handle Instance) {
 
 /* Connect a port to a data location. */
 static void 
-connectPort(LADSPA_Handle Instance, unsigned long Port, LADSPA_Data * DataLocation) {
-
-  SimpleDelayLine * self;
-
-  self = (SimpleDelayLine *)Instance;
-  switch (Port) {
-  case SDL_DELAY_LENGTH:
-    self->Delay = DataLocation;
-    break;
-  case SDL_DRY_WET:
-    self->DryWet = DataLocation;
-    break;
-  case SDL_INPUT:
-    self->Input = DataLocation;
-    break;
-  case SDL_OUTPUT:
-    self->Output = DataLocation;
-    break;
+connectPort(LADSPA_Handle Instance, unsigned long Port, LADSPA_Data * DataLocation)
+{
+  SimpleDelayLine * self = (SimpleDelayLine *)Instance;
+  if (Port >= 0 and Port < PLUGIN_PORTS_N) {
+    self->portData[Port] = DataLocation;
+  } else {
+    fprintf(stderr, "ERROR: unsupported port %lu", Port);
   }
 }
 
@@ -140,12 +117,12 @@ static void
 run(LADSPA_Handle Instance, unsigned long SampleCount) {
   SimpleDelayLine * self = (SimpleDelayLine *)Instance;
 
-  const unsigned long lDelay = (unsigned long)(CONSTRAIN(*(self->Delay), 0, MAX_DELAY)*self->SampleRate);
-  const float fWet = CONSTRAIN(*(self->DryWet), 0, 1);
+  const unsigned long lDelay = CONSTRAIN(*(self->portData[SDL_DELAY]), 0, MAX_DELAY)*self->SampleRate;
+  const float fWet = CONSTRAIN(*(self->portData[SDL_DRY_WET]), 0, 1);
   const float fDry = 1 - fWet;  
 
-  LADSPA_Data *Input = self->Input;
-  LADSPA_Data *Output = self->Output;
+  LADSPA_Data *Input = self->portData[SDL_INPUT];
+  LADSPA_Data *Output = self->portData[SDL_OUTPUT];
 
   const unsigned long lBufferWriteOffset = self->WritePointer;
   const unsigned long lBufferReadOffset = lBufferWriteOffset + self->BufferSize - lDelay;
