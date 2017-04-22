@@ -197,19 +197,6 @@ struct Plugin {
             plugin.portDescriptors[i] = p.descriptor;
             plugin.portRangeHints[i] = p.range;
         }
-
-        // functions
-        plugin.descriptor.instantiate = instantiate;
-        plugin.descriptor.cleanup = cleanup;
-
-        plugin.descriptor.activate = activate;
-        plugin.descriptor.deactivate = NULL;
-
-        plugin.descriptor.connect_port = connectPort;
-
-        plugin.descriptor.run = run;
-        plugin.descriptor.run_adding = NULL;
-        plugin.descriptor.set_run_adding_gain = NULL;
     }
 };
 
@@ -222,7 +209,20 @@ static Plugin plugin = {
         Name: "Simple Delay Line",
         Maker: "Richard Furse (LADSPA example plugins)",
         Copyright: "None",
-        PortCount: PLUGIN_PORTS_N
+        PortCount: PLUGIN_PORTS_N,
+        PortDescriptors: NULL,
+        PortNames: NULL,
+        PortRangeHints: NULL,
+        ImplementationData: NULL,
+        // function pointers
+        instantiate: instantiate,
+        connect_port: connectPort,
+        activate: activate,
+        run: run,
+        run_adding: NULL,
+        set_run_adding_gain: NULL,
+        deactivate: NULL,
+        cleanup: cleanup,
     },
     ports: {
         { "Delay (Seconds)", LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL,
