@@ -189,25 +189,14 @@ struct Plugin {
     static void initialize(Plugin &plugin) {
         plugin.descriptor.PortNames = plugin.portNames;
         plugin.descriptor.PortDescriptors = plugin.portDescriptors;
+        plugin.descriptor.PortRangeHints = plugin.portRangeHints;
 
         for (int i=0; i<PLUGIN_PORTS_N; i++) {
             Port p = plugin.ports[i];
             plugin.portNames[i] = p.name.c_str();
             plugin.portDescriptors[i] = p.descriptor;
-            //plugin.descriptor.PortRangeHints[i] = p.range;
+            plugin.portRangeHints[i] = p.range;
         }
-
-        // Port ranges
-        LADSPA_PortRangeHint *portRangeHints = plugin.portRangeHints;
-        plugin.descriptor.PortRangeHints = plugin.portRangeHints;
-        portRangeHints[SDL_DELAY_LENGTH].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE;
-        portRangeHints[SDL_DELAY_LENGTH].LowerBound = 0;
-        portRangeHints[SDL_DELAY_LENGTH].UpperBound = (LADSPA_Data)MAX_DELAY;
-        portRangeHints[SDL_DRY_WET].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE;
-        portRangeHints[SDL_DRY_WET].LowerBound = 0;
-        portRangeHints[SDL_DRY_WET].UpperBound = 1;
-        portRangeHints[SDL_INPUT].HintDescriptor = 0;
-        portRangeHints[SDL_OUTPUT].HintDescriptor = 0;
 
         // functions
         plugin.descriptor.instantiate = instantiate;
@@ -236,19 +225,30 @@ static Plugin plugin = {
         PortCount: PLUGIN_PORTS_N
     },
     ports: {
-        { "Delay (Seconds)", LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL },
-        { "Dry/Wet Balance", LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL },
-        { "Input", LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO },
-        { "Output", LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO },
+        { "Delay (Seconds)", LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL,
+            {
+                HintDescriptor: LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE,
+                LowerBound: 0.0,
+                UpperBound: (LADSPA_Data)MAX_DELAY,
+            }
+        },
+        { "Dry/Wet Balance", LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL,
+            {
+                HintDescriptor: LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE,
+                LowerBound: 0.0,
+                UpperBound: 1.0,
+            }
+        },
+        { "Input", LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO, { HintDescriptor: 0 } },
+        { "Output", LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO, { HintDescriptor: 0 } },
     },
     portNames: {},
     portDescriptors: {},
     portRangeHints: {},
 };
 
-/* Return a descriptor of the requested plugin type. Only one plugin
-   type is available in this library. */
-
+/* Return a descriptor of the requested plugin type.
+Only one plugin type is available in this library. */
 extern "C" {
 
 const LADSPA_Descriptor * 
@@ -264,4 +264,4 @@ ladspa_descriptor(unsigned long Index) {
   }
 }
 
-}
+} // end extern "C"
