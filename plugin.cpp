@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <array>
 
 /*****************************************************************************/
 
@@ -171,11 +172,56 @@ cleanup(LADSPA_Handle Instance) {
   free(self);
 }
 
+struct Port {
+    std::string name;
+    LADSPA_PortDescriptor descriptor;
+    LADSPA_PortRangeHint range;
+};
+
 struct Plugin {
     LADSPA_Descriptor descriptor;
-    char *portNames[PLUGIN_PORTS_N];
+    Port ports[PLUGIN_PORTS_N];
+
+    const char *portNames[PLUGIN_PORTS_N];
     LADSPA_PortDescriptor portDescriptors[PLUGIN_PORTS_N];
     LADSPA_PortRangeHint portRangeHints[PLUGIN_PORTS_N];
+
+    static void initialize(Plugin &plugin) {
+        plugin.descriptor.PortNames = plugin.portNames;
+        plugin.descriptor.PortDescriptors = plugin.portDescriptors;
+
+        for (int i=0; i<PLUGIN_PORTS_N; i++) {
+            Port p = plugin.ports[i];
+            plugin.portNames[i] = p.name.c_str();
+            plugin.portDescriptors[i] = p.descriptor;
+            //plugin.descriptor.PortRangeHints[i] = p.range;
+        }
+
+        // Port ranges
+        LADSPA_PortRangeHint *portRangeHints = plugin.portRangeHints;
+        plugin.descriptor.PortRangeHints = plugin.portRangeHints;
+        portRangeHints[SDL_DELAY_LENGTH].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE;
+        portRangeHints[SDL_DELAY_LENGTH].LowerBound = 0;
+        portRangeHints[SDL_DELAY_LENGTH].UpperBound = (LADSPA_Data)MAX_DELAY;
+        portRangeHints[SDL_DRY_WET].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE;
+        portRangeHints[SDL_DRY_WET].LowerBound = 0;
+        portRangeHints[SDL_DRY_WET].UpperBound = 1;
+        portRangeHints[SDL_INPUT].HintDescriptor = 0;
+        portRangeHints[SDL_OUTPUT].HintDescriptor = 0;
+
+        // functions
+        plugin.descriptor.instantiate = instantiate;
+        plugin.descriptor.cleanup = cleanup;
+
+        plugin.descriptor.activate = activate;
+        plugin.descriptor.deactivate = NULL;
+
+        plugin.descriptor.connect_port = connectPort;
+
+        plugin.descriptor.run = run;
+        plugin.descriptor.run_adding = NULL;
+        plugin.descriptor.set_run_adding_gain = NULL;
+    }
 };
 
 static Plugin plugin = {
@@ -188,56 +234,17 @@ static Plugin plugin = {
         Maker: "Richard Furse (LADSPA example plugins)",
         Copyright: "None",
         PortCount: PLUGIN_PORTS_N
-    }
+    },
+    ports: {
+        { "Delay (Seconds)", LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL },
+        { "Dry/Wet Balance", LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL },
+        { "Input", LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO },
+        { "Output", LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO },
+    },
+    portNames: {},
+    portDescriptors: {},
+    portRangeHints: {},
 };
-
-/*****************************************************************************/
-
-/* init() is called automatically when the plugin library is first loaded. */
-__attribute__ ((constructor))
-static void
-init() {
-    // Port types
-    LADSPA_PortDescriptor *portDescriptors = plugin.portDescriptors;
-    plugin.descriptor.PortDescriptors = plugin.portDescriptors;
-    portDescriptors[SDL_DELAY_LENGTH] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
-    portDescriptors[SDL_DRY_WET] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
-    portDescriptors[SDL_INPUT] = LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO;
-    portDescriptors[SDL_OUTPUT] = LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO;
-
-    // Port names
-    plugin.descriptor.PortNames = plugin.portNames;
-    char ** portNames = plugin.portNames;
-    portNames[SDL_DELAY_LENGTH] = strdup("Delay (Seconds)");
-    portNames[SDL_DRY_WET] = strdup("Dry/Wet Balance");
-    portNames[SDL_INPUT] = strdup("Input");
-    portNames[SDL_OUTPUT] = strdup("Output");
-
-    // Port ranges
-    LADSPA_PortRangeHint *portRangeHints = plugin.portRangeHints;
-    plugin.descriptor.PortRangeHints = plugin.portRangeHints;
-    portRangeHints[SDL_DELAY_LENGTH].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE;
-    portRangeHints[SDL_DELAY_LENGTH].LowerBound = 0;
-    portRangeHints[SDL_DELAY_LENGTH].UpperBound = (LADSPA_Data)MAX_DELAY;
-    portRangeHints[SDL_DRY_WET].HintDescriptor = LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE;
-    portRangeHints[SDL_DRY_WET].LowerBound = 0;
-    portRangeHints[SDL_DRY_WET].UpperBound = 1;
-    portRangeHints[SDL_INPUT].HintDescriptor = 0;
-    portRangeHints[SDL_OUTPUT].HintDescriptor = 0;
-
-    // functions
-    plugin.descriptor.instantiate = instantiate;
-    plugin.descriptor.cleanup = cleanup;
-
-    plugin.descriptor.activate = activate;
-    plugin.descriptor.deactivate = NULL;
-
-    plugin.descriptor.connect_port = connectPort;
-
-    plugin.descriptor.run = run;
-    plugin.descriptor.run_adding = NULL;
-    plugin.descriptor.set_run_adding_gain = NULL;
-}
 
 /* Return a descriptor of the requested plugin type. Only one plugin
    type is available in this library. */
@@ -246,6 +253,8 @@ extern "C" {
 
 const LADSPA_Descriptor * 
 ladspa_descriptor(unsigned long Index) {
+
+  Plugin::initialize(plugin);
 
   if (Index == 0) {
     LADSPA_Descriptor *d = &(plugin.descriptor);
