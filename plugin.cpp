@@ -5,6 +5,10 @@
 #include <array>
 
 #include <ladspa.h>
+#include <microflo.hpp>
+#include <linux.hpp>
+
+#include "componentlib.hpp"
 
 /* The port numbers for the plugin: */
 enum PLUGIN_PORTS {
@@ -18,18 +22,31 @@ enum PLUGIN_PORTS {
 #define CONSTRAIN(x, min, max) (((x) < min) ? min : (((x) > max) ? max : (x)))
 
 /* Instance data */
-typedef struct {
+struct InstanceData {
   LADSPA_Data SampleRate;
   LADSPA_Data *portData[PLUGIN_PORTS_N];
-} InstanceData;
+
+  // MicroFlo things
+  LinuxIO io;
+  FixedMessageQueue queue;
+  Network network;
+  HostCommunication controller;
+  LinuxSerialTransport serial;
+
+  InstanceData(std::string port)
+    : network(&io, &queue) 
+    , serial(port)
+  {
+    serial.setup(&io, &controller);
+  }
+};
 
 /* Construct a new plugin instance. */
 static LADSPA_Handle 
 instantiate(const LADSPA_Descriptor * Descriptor, unsigned long SampleRate)
 {
-  InstanceData *self = new InstanceData;
-  if (self == NULL) 
-    return NULL;
+  const std::string serial = "plugin.microflo"; // FIXME: randomize / allow configure
+  InstanceData *self = new InstanceData(serial);
   
   self->SampleRate = (LADSPA_Data)SampleRate;
 

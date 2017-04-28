@@ -5,7 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "microflo runtime --componentmap build/blink/componentlib-map.json",
-    "build": "rm -r build && mkdir build && g++ -Wall -Werror -shared -fPIC -g -o build/plugin.so plugin.cpp"
+    "build": "rm -r build && mkdir build && microflo generate --target=linux --library ./components.json ./graphs/default.fbp ./build/main.cpp && g++ -Wall -Werror -DLINUX -std=c++0x -I./build -I./node_modules/microflo/microflo -Wno-unused-variable -lrt -lutil -shared -fPIC -g -o build/plugin.so plugin.cpp"
   },
   "repository": {
     "type": "git",
