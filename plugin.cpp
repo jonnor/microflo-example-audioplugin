@@ -101,9 +101,15 @@ struct Plugin {
 
         for (int i=0; i<PLUGIN_PORTS_N; i++) {
             Port p = plugin.ports[i];
-            plugin.portNames[i] = p.name.c_str();
+            // don't know why, but both LMMS and analyseplugin needs copied name to detect the ports
+            plugin.portNames[i] = strdup(p.name.c_str());
             plugin.portDescriptors[i] = p.descriptor;
             plugin.portRangeHints[i] = p.range;
+        }
+    }
+    static void destroy(Plugin &plugin) {
+        for (int i=0; i<PLUGIN_PORTS_N; i++) {
+            free((char *)plugin.portNames[i]);
         }
     }
 };
@@ -154,6 +160,11 @@ static Plugin plugin = {
     portDescriptors: {},
     portRangeHints: {},
 };
+
+__attribute__ ((destructor))
+static void destroy() {
+  Plugin::destroy(plugin);
+}
 
 /* Return a descriptor of the requested plugin type.
 Only one plugin type is available in this library. */
