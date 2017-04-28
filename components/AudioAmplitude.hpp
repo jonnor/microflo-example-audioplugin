@@ -32,6 +32,10 @@ public:
                 send(Packet(ErrorUnsupportedType), OutPorts::error);
                 return;
             }
+            if (!buf->data || buf->n_samples > 10000) {
+                send(Packet(ErrorUnsupportedValue), OutPorts::error);
+                return;
+            }
             for (size_t i=0; i<buf->n_samples; i++) {
                 buf->data[i] *= amp; 
             }
