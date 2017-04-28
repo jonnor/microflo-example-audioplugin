@@ -4,11 +4,15 @@
 #include <stdio.h>
 #include <array>
 
+#define MICROFLO_EMBED_GRAPH
+
 #include <ladspa.h>
 #include <microflo.hpp>
 #include <linux.hpp>
 
+#include "./src/audio.hpp"
 #include "componentlib.hpp"
+#include "plugingraph.h"
 
 /* The port numbers for the plugin: */
 enum PLUGIN_PORTS {
@@ -38,6 +42,8 @@ struct InstanceData {
     , serial(port)
   {
     serial.setup(&io, &controller);
+    controller.setup(&network, &serial);
+    MICROFLO_LOAD_STATIC_GRAPH((&controller), graph);
   }
 };
 
@@ -83,10 +89,32 @@ run(LADSPA_Handle Instance, unsigned long SampleCount) {
   LADSPA_Data *Input = self->portData[PORT_INPUT];
   LADSPA_Data *Output = self->portData[PORT_OUTPUT];
 
+  // FIXME: don't allocate here, in realtime
+  float *data = (float *)malloc(sizeof(float)*SampleCount);
+  Audio::Buffer buffer = { Input, SampleCount };
+
   for (unsigned long index = 0; index < SampleCount; index++) {
-    const LADSPA_Data in = *(Input++);
-    *(Output++) = (in * amp);
+     buffer.data[index] = *(Input++);
   }
+
+  const Packet packet(Audio::BufferType, &buffer);
+
+  // send input packet
+  // TODO: look up based on exported ports
+  const MicroFlo::PortId port = 0;
+  const MicroFlo::NodeId node = 1;
+  self->network.sendMessageTo(node, port, packet);
+  // FIXME: also send port value
+  do {
+    self->network.runTick();
+    self->serial.runTick();
+  } while (!self->queue.done());
+
+  for (unsigned long index = 0; index < SampleCount; index++) {
+    *(Output++) = buffer.data[index];
+  }
+
+  free(data);
 }
 
 /* Cleanup instance data */
