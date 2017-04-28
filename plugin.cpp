@@ -30,6 +30,9 @@ struct InstanceData {
   LADSPA_Data SampleRate;
   LADSPA_Data *portData[PLUGIN_PORTS_N];
 
+  static const size_t MAX_BUFFER_SIZE = 2048;
+  float buffer[MAX_BUFFER_SIZE];
+
   // MicroFlo things
   LinuxIO io;
   FixedMessageQueue queue;
@@ -82,6 +85,10 @@ static void
 run(LADSPA_Handle Instance, unsigned long SampleCount) {
   InstanceData * self = (InstanceData *)Instance;
 
+  if (SampleCount > self->MAX_BUFFER_SIZE) {
+    fprintf(stderr, "Too many samples to fit buffer: %ld", SampleCount);
+  }
+
   const float amp = CONSTRAIN(*(self->portData[PORT_VALUE]), 0, 1);
   //const float fWet = CONSTRAIN(*(self->portData[PORT_DRY_WET]), 0, 1);
   //const float fDry = 1 - fWet;  
@@ -89,32 +96,29 @@ run(LADSPA_Handle Instance, unsigned long SampleCount) {
   LADSPA_Data *Input = self->portData[PORT_INPUT];
   LADSPA_Data *Output = self->portData[PORT_OUTPUT];
 
-  // FIXME: don't allocate here, in realtime
-  float *data = (float *)malloc(sizeof(float)*SampleCount);
-  Audio::Buffer buffer = { Input, SampleCount };
-
+  // Copy into our own buffer
+  Audio::Buffer buffer = { self->buffer, SampleCount };
   for (unsigned long index = 0; index < SampleCount; index++) {
      buffer.data[index] = *(Input++);
   }
-
-  const Packet packet(Audio::BufferType, &buffer);
 
   // send input packet
   // TODO: look up based on exported ports
   const MicroFlo::PortId port = 0;
   const MicroFlo::NodeId node = 1;
+  const Packet packet(Audio::BufferType, &buffer);
   self->network.sendMessageTo(node, port, packet);
   // FIXME: also send port value
+  // Process
   do {
     self->network.runTick();
     self->serial.runTick();
   } while (!self->queue.done());
 
+  // Output processed data
   for (unsigned long index = 0; index < SampleCount; index++) {
     *(Output++) = buffer.data[index];
   }
-
-  free(data);
 }
 
 /* Cleanup instance data */
