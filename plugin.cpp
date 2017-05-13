@@ -75,7 +75,7 @@ struct InstanceData {
 static LADSPA_Handle 
 instantiate(const LADSPA_Descriptor * Descriptor, unsigned long SampleRate)
 {
-  const std::string serial = "plugin.microflo"; // FIXME: randomize / allow configure
+  const std::string serial = "plugin-0x"+std::to_string((uint64_t)Descriptor)+".microflo";
   InstanceData *self = new InstanceData(serial);
   
   self->SampleRate = (LADSPA_Data)SampleRate;
