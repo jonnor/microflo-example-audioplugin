@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <array>
+#include <functional>
 
 #define MICROFLO_EMBED_GRAPH
 
@@ -13,6 +14,10 @@
 #include "./src/audio.hpp"
 #include "componentlib.hpp"
 #include "plugingraph.h"
+#include "plugingraph_maps.h"
+
+const MicroFlo::NodeId OUTPORT_NODE = graph_outports_node[0];
+const MicroFlo::PortId OUTPORT_PORT = graph_outports_port[0]; 
 
 /* The port numbers for the plugin: */
 enum PLUGIN_PORTS {
@@ -24,6 +29,21 @@ enum PLUGIN_PORTS {
 };
 
 #define CONSTRAIN(x, min, max) (((x) < min) ? min : (((x) > max) ? max : (x)))
+
+// Override to be able to know when processing is done
+class CustomController : public HostCommunication {
+
+public:
+    std::function< void(const Message &m, const Component *src, MicroFlo::PortId senderPort) > onPacketSent;
+
+protected:
+    virtual void packetSent(const Message &m, const Component *src, MicroFlo::PortId senderPort) {
+        HostCommunication::packetSent(m, src, senderPort);
+        if (onPacketSent) {
+            onPacketSent(m, src, senderPort);
+        }
+    }
+};
 
 /* Instance data */
 struct InstanceData {
@@ -37,7 +57,7 @@ struct InstanceData {
   LinuxIO io;
   FixedMessageQueue queue;
   Network network;
-  HostCommunication controller;
+  CustomController controller;
   LinuxSerialTransport serial;
 
   InstanceData(std::string port)
@@ -47,6 +67,7 @@ struct InstanceData {
     serial.setup(&io, &controller);
     controller.setup(&network, &serial);
     MICROFLO_LOAD_STATIC_GRAPH((&controller), graph);
+    network.subscribeToPort(OUTPORT_NODE, OUTPORT_PORT, true); // output
   }
 };
 
@@ -110,10 +131,22 @@ run(LADSPA_Handle Instance, unsigned long SampleCount) {
   self->network.sendMessageTo(node, port, packet);
   // FIXME: also send port value
   // Process
+  bool waitingForDone = true;
+
+  self->controller.onPacketSent = [&waitingForDone](const Message &m, const Component *src, MicroFlo::PortId senderPort) {
+    if (src->id() == OUTPORT_NODE and senderPort == OUTPORT_PORT) { 
+      Audio::Buffer *out = (Audio::Buffer *)m.pkg.asPointer(Audio::BufferType);
+      if (!out) {
+        fprintf(stderr, "wrong packet type returned\n");
+      }
+      waitingForDone = false;
+    }
+  };
+
   do {
     self->network.runTick();
     self->serial.runTick();
-  } while (!self->queue.done());
+  } while (waitingForDone);
 
   // Output processed data
   for (unsigned long index = 0; index < SampleCount; index++) {

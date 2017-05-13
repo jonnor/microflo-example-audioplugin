@@ -1,1 +1,5 @@
+INPORT=f.IN:IN
+OUTPORT=g.OUT:OUT
+
 f(Forward) -> vol(AudioAmplitude) -> g(Forward)
+vol ERROR -> g
