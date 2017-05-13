@@ -19,9 +19,12 @@ outports:
     type: all
     description: ""
 microflo_component */
-class AudioAmplitude : public SingleOutputComponent {
+class AudioAmplitude : public Component {
 public:
+    AudioAmplitude() : Component(outPorts, 3) {}
+
     virtual void process(Packet in, MicroFlo::PortId port) {
+
         using namespace AudioAmplitudePorts;
         if (port == InPorts::amplitude) {
             amp = in.asFloat();
@@ -46,4 +49,5 @@ public:
     }
 private:
     float amp = 0.3;
+    Connection outPorts[3];
 };
